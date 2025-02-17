@@ -1,0 +1,32 @@
+cluster_rank	cluster_X	cluster_Y	best_adjusted_pvalue
+1	Urate	2-hydroxyglutarate;Mesaconic acid	0.0013237407988495383
+2	Threonine	Fructose;Guanidinoacetate;Trimethyllysine;Stachyose;Raffinose;Trehalose	0.008485267841226092
+3	Threonine	4-Acetamidobutanoate	0.012964403832322018
+4	Urate	Trimethyllysine	0.019401774732172822
+5	Urate	Fructose	0.032364208110720806
+6	Threonine	Succinic Acid	0.038586567927529486
+7	Urate	Myo-Inositol	0.043844559612690785
+8	10-Hydroxydecanoic acid	Kynurenate	0.04525275732979669
+9	Threonine	Oleic acid	0.04719969859241628
+10	Urate	Stachyose	0.04820212050434545
+11	10-Hydroxydecanoic acid	Pentanoate	0.05331682738804002
+12	Urate	Pentadecanoic acid	0.05331682738804002
+13	Urate	Histidine	0.05376280089061763
+14	Urate	Biotin	0.05645476336102219
+15	Aniline-2-Sulfonate	4-Acetamidobutanoate	0.05675026962465965
+16	Aniline-2-Sulfonate	Oxoglutarate	0.05729846053541896
+17	Threonine	Biotin	0.05729846053541896
+18	Threonine	Pipecolate	0.05729846053541896
+19	Uridine	Taurine	0.05729846053541896
+20	10-Hydroxydecanoic acid	Benzyl Alcohol	0.06940803521085151
+21	Aniline-2-Sulfonate	4-Pyridoxate	0.0731284256142339
+22	Urate	Raffinose	0.0731284256142339
+23	10-Hydroxydecanoic acid	Ascorbic acid	0.07803224012190525
+24	Uridine	N-Acetylasparagine	0.08918536625415428
+25	Pipecolate	N-Formyl-L-Methionine	0.08918536625415428
+26	Urate	Oleic acid	0.08918536625415428
+27	Urate	cis-11-Eicosenoic acid	0.0894005621368994
+28	10-Hydroxydecanoic acid	Pentadecanoic acid	0.09864321511627622
+29	Normetanephrine	2-hydroxyglutarate	0.0996666596219493
+30	Acetoacetate	Myo-Inositol	0.0996666596219493
+31	Threonine	D-Sedoheptulose	0.0996666596219493
