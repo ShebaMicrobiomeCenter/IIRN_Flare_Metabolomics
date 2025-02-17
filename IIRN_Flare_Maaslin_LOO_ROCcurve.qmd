@@ -1,0 +1,216 @@
+---
+title: "IIRN_Flare_Maaslin4_ROC"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+#| message: false
+
+library (tidyverse)
+library(dplyr)
+library(pROC)
+library(ggplot2)
+library(patchwork)
+```
+
+You can add options to executable code like this
+
+```{r}
+#| message: false
+#| echo: false
+
+# sample_type <- 'Serum'
+sample_type <- 'Stool'
+
+map_type <- 'firstNF'
+# map_type <- 'firstALL'
+# map_type <- 'secondNF'
+# map_type <- 'thirdNF'
+
+map <- paste0('~/Dropbox/Metabolomics/RF/', sample_type, '_RF_',map_type,'_map.tsv') |> read_tsv()
+data <- paste0('~/Dropbox/Metabolomics/RF/', sample_type, '_Data_MZM10_N2_filtered_v2.tsv') |> read.table(sep="\t", row.names = 1) %>% t() %>% as.data.frame()
+
+```
+
+```{r}
+#| message: false
+
+colnames(data) <- make.names(colnames(data))
+data$Feature <- make.names(data$Feature)
+data <- data |> rename(SampleID = Feature)
+
+data <- data %>% mutate_at(c(colnames(data[-1])), as.numeric) #change the types of the columns (with the peak area values) from character to numeric.
+
+data1 <- data |> inner_join(map |> select(SampleID, IIRN_Flare))
+```
+
+```{r}
+#| message: false
+
+Index_df_zscore <- data.frame(SampleID = map$SampleID,
+                              IIRN_Flare = map$IIRN_Flare,
+                              z_score = NA,
+                              flare_index = NA,
+                              row.names = map$pn_ID)
+
+Index_df <- data.frame(SampleID = map$SampleID, row.names = map$pn_ID)
+Zscore_df <- data.frame(SampleID = map$SampleID, row.names = map$pn_ID)
+
+compound_counts <- data.frame(feature = colnames(data1 |> select(-SampleID)))
+
+for(pnid in unique(map$pn_ID)) {
+  sampleid <- map |> filter(pn_ID == pnid) |> pull(SampleID)
+  
+  temp_df <- data.frame(SampleID = data1$SampleID)  
+  compound_folder = paste0(sample_type,"_maaslin_IIRN_Flare_LOO_", pnid)
+    
+    IIRNflare_compounds <- 
+      paste0('~/Dropbox/Metabolomics/Maaslin/', sample_type,'_IIRNFlare_LOO/',compound_folder,'/significant_results.tsv') |> read_tsv() |> 
+      filter(metadata == 'IIRN_Flare')
+    
+    compound_counts <- compound_counts |> full_join(IIRNflare_compounds |> select(feature, coef))
+    colnames(compound_counts) <- colnames(compound_counts) |> str_replace('coef$', paste0('coef_',pnid))
+    
+    flared_compounds <- IIRNflare_compounds |> filter(coef < 0) |> pull(feature)
+    never_flared_compounds <- IIRNflare_compounds |> filter(coef > 0) |> pull(feature)
+    
+    temp_df$flared_area <-  data1 |> select(all_of(flared_compounds)) |> apply(1, sum)
+    temp_df$never_flared_area <-  data1 |> select(all_of(never_flared_compounds)) |> apply(1, sum)
+    temp_df <-  temp_df |> mutate(flare_index = flared_area/never_flared_area) |> 
+      mutate(flare_index = ifelse(flare_index > 10000, NaN, flare_index))
+    
+    temp_df <- temp_df |> 
+      mutate(
+      zscore = round(((flare_index-mean(flare_index, na.rm = T))/
+                        sd(flare_index, na.rm = T)),3))
+    
+    Index_df_zscore[pnid,]$z_score <- 
+    temp_df |> filter(SampleID == sampleid) |> pull(zscore)
+        
+    Index_df_zscore[pnid,]$flare_index <- 
+      temp_df |> filter(SampleID == sampleid) |> pull(flare_index)
+    
+    Index_df <- Index_df %>% full_join(temp_df |> select(SampleID, flare_index))
+    Zscore_df <- Zscore_df |> full_join(temp_df |> select(SampleID, zscore))
+    
+    colnames(Index_df) <- 
+      colnames(Index_df) |> str_replace('flare_index$', paste0('flare_index_',pnid))
+    
+    colnames(Zscore_df) <- 
+      colnames(Zscore_df) |> str_replace('zscore$', paste0('zscore_',pnid))
+
+  }
+
+```
+
+```{r}
+#| message: false
+
+df_FI <- data.frame(pred = Index_df_zscore$z_score, #flare_index 
+                 survived = as.factor(Index_df_zscore$IIRN_Flare))
+df_FI <- df_FI |> arrange(desc(pred))
+
+roc_obj_FI <- pROC::roc(df_FI$survived, df_FI$pred, levels=c('never_flared','flared'))
+auc_val_FI <- pROC::auc(roc_obj_FI)
+
+roc_df_FI <- data.frame(
+  TPR=rev(roc_obj_FI$sensitivities), 
+  FPR=rev(1 - roc_obj_FI$specificities),
+  Value = paste0("Flare index (AUC = ",round(auc_val_FI,2),")"))
+
+df_CRP <- data.frame(pred = map$CRP_Absolute, 
+                 survived = as.factor(map$IIRN_Flare))
+df_CRP <- df_CRP |> arrange(desc(pred))
+
+roc_obj_CRP <- pROC::roc(df_CRP$survived, df_CRP$pred, levels=c('never_flared','flared'))
+auc_val_CRP <- pROC::auc(roc_obj_CRP)
+
+roc_df_CRP <- data.frame(
+  TPR=rev(roc_obj_CRP$sensitivities), 
+  FPR=rev(1 - roc_obj_CRP$specificities),
+  Value = paste0("CRP Absolute (AUC = ",round(auc_val_CRP,2),")"))
+
+df_FCP <- data.frame(pred = map$FCP_Absolute, 
+                 survived = as.factor(map$IIRN_Flare))
+df_FCP <- df_FCP |> arrange(desc(pred))
+
+roc_obj_FCP <- pROC::roc(df_FCP$survived, df_FCP$pred, levels=c('never_flared','flared'))
+auc_val_FCP <- pROC::auc(roc_obj_FCP)
+
+roc_df_FCP <- data.frame(
+  TPR=rev(roc_obj_FCP$sensitivities), 
+  FPR=rev(1 - roc_obj_FCP$specificities),
+  Value = paste0("FCP Absolute (AUC = ",round(auc_val_FCP,2),")"))
+
+# roc_df <- rbind(roc_df_FI,roc_df_CRP,roc_df_FCP)
+roc_df <- rbind(roc_df_CRP,roc_df_FCP)
+```
+
+```{r}
+#| message: false
+
+p_roc1 <- 
+  roc_df_FI |> 
+  ggplot() + 
+  geom_line(aes(x=FPR, y=TPR)) + 
+  theme_bw() + 
+  geom_segment(aes(x = 0, xend = 1, y = 0, yend = 1), color="#999999", linetype="dashed") + 
+  # scale_color_manual(values = c("red","blue","darkgreen")) +
+  geom_label(x=0.7, y=0.2, 
+           label=paste0("Flare Index z-score (AUC = ",round(auc_val_FI,2),")"), label.size = NA)+
+  ggtitle(paste(sample_type," ROC Curve", map_type)) +
+  theme(plot.background = element_blank(),
+        legend.position = c(0.7, 0.2),
+        legend.title = element_blank(),
+        plot.title = element_text(size = 6),
+        text = element_text(size=12),
+        axis.title = element_text(size = 16))
+p_roc1
+```
+
+```{r}
+#| message: false
+
+p_roc2 <- 
+  roc_df |> 
+  ggplot() + 
+  geom_line(aes(x=FPR, y=TPR, color = Value)) + 
+  theme_bw() + 
+  geom_segment(aes(x = 0, xend = 1, y = 0, yend = 1), color="#999999", linetype="dashed") + 
+  scale_color_manual(values = c("red","blue")) +
+  ggtitle(paste(sample_type," ROC Curve", map_type)) +
+  theme(plot.background = element_blank(),
+        legend.position = c(0.7, 0.2),
+        legend.title = element_blank(),
+        plot.title = element_text(size = 6),
+        text = element_text(size=12),
+        axis.title = element_text(size = 16))
+p_roc2
+```
+
+```{r}
+#| message: false
+p_roc <- p_roc1 | p_roc2 
+
+p_roc &
+  theme(plot.background = element_blank(),
+        legend.title = element_blank(),
+        plot.title = element_text(size = 6),
+        text = element_text(size=12),
+        axis.title = element_text(size = 16))
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
+
+```{r}
+
+```
