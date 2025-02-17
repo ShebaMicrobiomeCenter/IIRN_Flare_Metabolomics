@@ -1,0 +1,140 @@
+---
+title: "Sankey_plot"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+#| message: false
+
+library(tidyverse)
+library(ggplot2)
+library(ggsankey)
+```
+
+You can add options to executable code like this
+
+```{r}
+#| message: false
+
+folder_name <- "halla_res_IIRNFlarembx_Serum13VsStool55_n73"
+type1 <- "Serum"
+type2 <- "Stool"
+
+serum_order <- "Serum_IIRNFlare_Compounds_for_barplot.csv" |> read_csv()
+stool_order <- "Stool_IIRNFlare_Compounds_for_barplot.csv" |> read_csv()
+```
+
+```{r}
+#| message: false
+#| echo: false
+
+hallagram0 <- 
+  paste0("./",folder_name,"/all_associations.txt") |> 
+  read_tsv()
+
+hallagram <- hallagram0 |> filter(`q-values` < 0.1) |> filter(association>0)
+
+names(hallagram)[1:2] <- c(type1, type2)
+
+```
+
+```{r}
+#| message: false
+
+serum_mbx <- hallagram |> pull(Serum) |> unique()
+stool_mbx <- hallagram |> pull(Stool) |> unique()
+
+serum_order1 <- serum_order |> filter(Feature %in% serum_mbx) |> arrange(Coef)
+stool_order1 <- stool_order |> filter(Feature %in% stool_mbx) |> arrange(Coef)
+
+serum_order1$Feature <- factor(serum_order1$Feature, levels = serum_order1$Feature)
+stool_order1$Feature <- factor(stool_order1$Feature, levels = stool_order1$Feature)
+
+
+serum_order1 <- serum_order1 |> mutate(node = paste0(type1,Feature))
+serum_order1$node <- factor(serum_order1$node, levels=serum_order1$node)
+
+stool_order1 <- stool_order1 |> mutate(node = paste0(type2,Feature))
+stool_order1$node <- factor(stool_order1$node, levels = stool_order1$node)
+
+features_order <- serum_order1 |> select(node) |> rbind(stool_order1 |> select(node))
+
+```
+
+```{r}
+#| message: false
+
+filtered_long <- hallagram |> make_long(names(hallagram)[1], names(hallagram)[2]) |> 
+  arrange(x,node) |>
+  mutate(labels = node)
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
+
+```{r}
+#| message: false
+
+source("~/Dropbox/Metabolomics/R_scripts/add_hmdb_classification.R")
+filtered_long1 <- 
+  add_hmdb_classification(filtered_long |> rename(Feature = node), n_class = 13) |> rename(node = Feature)
+
+filtered_long1 <- filtered_long1 |> group_by(x,node) |> 
+  arrange(x,Final_Class3, by_group = TRUE) |> mutate(node = paste0(x,node),
+                                                     next_node = paste0(next_x,next_node))
+
+filtered_long1$node = factor(filtered_long1$node, levels = levels(features_order$node))
+
+myPalette1 <- hmdb_palette(filtered_long1)
+```
+
+```{r}
+#| message: false
+
+pl <- filtered_long1 |> 
+  ggplot(aes(x = x,
+             next_x = next_x, 
+             node = node, 
+             next_node = next_node,
+             label = labels
+             , fill = Final_Class3
+             )) +
+  geom_sankey(flow.fill = "#F4A582", 
+              flow.alpha = 0.25
+              , width = 0.05 # width of the nodes (colored by mbx class)
+              , space = 0.5 # spaced between the nodes
+              ,show.legend = FALSE) +
+ scale_fill_manual(values = myPalette1) +
+  geom_sankey_text(data = filtered_long1 |> 
+                     mutate(labels = ifelse(x == type1, paste0(labels,"    "),""))
+    , size = 5, hjust = 1
+    , vjust = 0) +  # serum lables
+  geom_sankey_text(data = filtered_long1 |> 
+                     mutate(labels = ifelse(x == type2 ,paste0("   ",labels),""))
+                    , size = 4.25, hjust = -0.0
+                   , vjust = 0.09) + # stool labels
+  theme_sankey(base_size = 16) + 
+  theme(legend.position = "none"
+        , axis.text = element_blank()
+        , axis.ticks = element_blank()
+        , axis.title = element_blank()
+        , plot.background = element_blank()
+        , panel.grid = element_blank()
+        )
+
+pl
+```
+
+```{r}
+#| message: false
+
+
+```

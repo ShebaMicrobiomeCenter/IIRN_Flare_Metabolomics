@@ -1,0 +1,310 @@
+---
+title: "box_barplot"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+#| message: false
+
+library(tidyverse)
+library(ggplot2)
+library(ggside)
+library(patchwork)
+
+```
+
+```{r boxplot_functions}
+#| message: false
+
+create_box_data <- function(sample_type){
+  f_base_path <- "~/Dropbox/Metabolomics/"
+  folder_name <- 
+    paste0(sample_type, '_maaslin_#4_IIRNFlare_onlyRemission_v2')
+  
+  data <- paste0(f_base_path,'Final_datasets/', sample_type,
+                 '_Data_MZM10_N2_filtered_v2.csv')  |> read_csv()
+  metadata <- paste0(f_base_path,'Final_datasets/', sample_type,
+                     '_metadata.txt')  |> read_tsv()
+  data$mName <- make.names(data$Feature)
+  metadata1 <- metadata |>  filter(Cohort == 'IIRN') |> 
+    filter(Disease_Status == 'CD_Remission')
+  iirn1 <- intersect(colnames(data), metadata1$SampleID)
+  data1 <- data |> select('Feature','mName',all_of(iirn1))
+  
+  compounds1 <- 
+    paste0(f_base_path,'/Maaslin/', folder_name,
+           '/significant_results.tsv') |>
+    read_tsv() |> filter(metadata == 'IIRN_Flare') |> 
+    rename(mName = feature)
+  
+  data2 <- 
+    data1 |> inner_join(compounds1 |> select(mName)) |> select(-mName)
+  
+  feature_order <- 
+    paste0(f_base_path,'/R_scripts/', sample_type,
+           '_IIRNFlare_Compounds_for_barplot.csv') |> read_csv()
+  feature_order$Feature <- fct_reorder(feature_order$Feature,
+                                       feature_order$Perc_significant)
+  data3 <- data2 |> 
+    pivot_longer(cols = contains("_"), 
+                 names_to = 'SampleID', values_to = 'Peak_Area')
+  data3 <- data3|> 
+    inner_join(metadata1|> select('SampleID', 'IIRN_Flare', "pn_ID")) |> 
+    mutate(Type = sample_type)
+  data3 <- data3 |> 
+    mutate(mName = Feature |> make.names()) |> 
+    left_join(compounds1, by = "mName") |> 
+    mutate(direction = ifelse(-1*sign(coef) == 1,'Higher\nin Relapsers',
+                              'Lower\nin Relapsers'))
+  data3$direction <- 
+    factor(data3$direction,
+           levels = c('Lower\nin Relapsers','Higher\nin Relapsers'))
+  
+  data3$Feature <- 
+    factor(data3$Feature, levels = levels(feature_order$Feature))
+  
+  return(data3)
+}
+
+create_boxplot <- function(sample_type,data,boxplot_theme){
+  f_base_path <- "~/Dropbox/Metabolomics/"
+  source("~/Dropbox/Metabolomics/R_scripts/add_hmdb_classification.R")
+  data1 <- add_hmdb_classification(data, classtokeep = "Hydroxy")
+  myPalette <- hmdb_palette(data1)
+  
+  feature_order <- 
+    paste0(f_base_path,'/R_scripts/', sample_type,
+           '_IIRNFlare_Compounds_for_barplot.csv') |> read_csv()
+  feature_order$Feature <- fct_reorder(feature_order$Feature,
+                                       feature_order$Perc_significant)
+  
+  pl <- 
+    data1 |> 
+    ggplot(aes(y = factor(Feature, levels = levels(feature_order$Feature)),
+                        x=log(Peak_Area), fill=IIRN_Flare)) + 
+    geom_boxplot(color = 'grey50', lwd = 0.25, 
+                 outlier.shape = NA, outlier.stroke = 0
+                 , width = 0.95) + 
+    ggside::geom_ysidepoint(aes(x = 0, color = Final_Class3 ),size = 3) +
+    ggside(y.pos = "left") +
+    theme_set(boxplot_theme) +
+  scale_fill_manual(values = c("#F8766D","#00BFC4"), 
+                    labels = c('Relapsers','Non-Relapsers'), 
+                    guide = "none") +
+    scale_color_manual(values = myPalette, 
+                       name = "Classifications", guide = "none") +
+  facet_grid(direction~., space = "free", scales = "free")
+  
+  return(pl)
+}
+```
+
+You can add options to executable code like this
+
+```{r set_themes}
+
+base_theme <- theme_bw() +
+  theme(plot.background = element_blank(),
+        title = element_text(size = 6),
+        axis.title.y = element_blank(),
+        axis.title.x = element_text(size = 14),
+        legend.title = element_blank(),
+        axis.text.x = element_text(size=12),
+        legend.text = element_blank()
+        )
+
+boxplot_theme <- base_theme +
+   theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        strip.text = element_blank(),
+        axis.text.y = element_text(size=13)) +
+  theme(ggside.axis.text.x = element_blank(), 
+        ggside.axis.ticks.x = element_blank(), 
+        ggside.panel.scale = .1)
+
+barplot_theme <- base_theme +
+  theme(panel.grid = element_blank(), 
+        strip.text = element_text(size = 14),
+        axis.text.y = element_blank(), 
+        axis.title.y = element_blank(), 
+        axis.ticks.y = element_blank(),
+        strip.background = element_rect(fill = "white"))
+  
+```
+
+```{r barplot_function}
+#| message: false
+#| echo: false
+
+create_bar_data <- function(sample_type){
+  data <- paste0('~/Dropbox/Metabolomics/R_scripts/', sample_type,
+                 '_IIRNFlare_Compounds_for_barplot.csv') |> 
+    read_csv() |> 
+    mutate(Type = sample_type)
+  
+  data$Feature <- fct_reorder(data$Feature, data$Perc_significant)
+  
+  data$CD_signCoef2 <- 
+    ifelse(-1*sign(data$Coef) == 1,'Higher\nin Relapsers','Lower\nin Relapsers') |> 
+    factor(levels = c('Lower\nin Relapsers','Higher\nin Relapsers'))
+  
+  return(data)
+}
+
+create_barplot <- function(data,barplot_theme){
+  pl <- data |> 
+    ggplot(aes(y= Feature, 
+             x= Perc_significant, fill = CD_signCoef2), 
+           show.legend = FALSE) +
+  geom_col(width = .6) +
+  theme_set(barplot_theme) +
+  expand_limits(x = c(0,100)) +
+  scale_x_continuous(breaks = seq(from = 0,to = 100,by = 50)) + 
+  scale_fill_manual(values = c("#00BFC4","#F8766D"), guide= "none") +
+  facet_grid(CD_signCoef2~., space = "free", scales = "free") + 
+  labs(x = "% significant in\nMaAsLin analyses") 
+  
+  return(pl)
+}
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
+
+```{r}
+#| message: false
+
+serum_box <- create_box_data("Serum")
+serum_bar <- create_bar_data("Serum")
+stool_box <- create_box_data("Stool")
+stool_bar <- create_bar_data("Stool")
+
+serum_boxplot <- create_boxplot("Serum",serum_box,boxplot_theme) + theme_set(boxplot_theme)
+
+stool_boxplot <- create_boxplot("Stool",stool_box,boxplot_theme) +
+  theme_set(boxplot_theme)
+
+serum_barplot <- create_barplot(serum_bar,barplot_theme) +
+  theme_set(barplot_theme) +
+  scale_x_continuous(breaks = seq(from = 0,to = 100,by = 50)) +
+  labs(x = "% significant in\nMaAsLin analyses")
+
+stool_barplot <- create_barplot(stool_bar,barplot_theme) +
+  theme_set(barplot_theme) +
+  scale_x_continuous(breaks = seq(from = 0,to = 100,by = 50)) +
+  labs(x = "% significant in\nMaAsLin analyses")
+```
+
+```{r}
+
+serum_barplot
+serum_boxplot
+
+stool_boxplot +theme_set(boxplot_theme) 
+```
+
+```{r}
+
+serum <- serum_boxplot+serum_barplot + 
+  plot_layout(widths = c(0.65,0.35))
+serum
+```
+
+```{r}
+
+stool <- stool_boxplot+stool_barplot + 
+  plot_layout(
+    widths = c(0.65,0.35))
+stool
+```
+
+```{r}
+ggsave(filename = "~/Dropbox/Metabolomics/R_scripts/R_figures/Serum_box_barplot9.png",width = 10.5, height = 5.75, scale = 0.6, pl=serum)
+
+
+ggsave(filename = "~/Dropbox/Metabolomics/R_scripts/R_figures/Stool_box_barplot9.png",width = 10.5, height = 16, scale = 0.6, pl=stool)
+```
+
+```{r}
+
+source("~/Dropbox/PhD/R_scripts/R_functions/Save_pptx.R")
+create_pptx(plot =serum,
+            path = "~/Dropbox/Metabolomics/R_scripts/R_figures/Serum_IIRNFlare_boxbar1.pptx"
+            , left = 0.5, top = 0.5, width = 8, height = 4)
+
+create_pptx(plot =stool,
+            path = "~/Dropbox/Metabolomics/R_scripts/R_figures/Serum_IIRNFlare_boxbar1.pptx"
+            , left = 0.5, top = 0.5, width = 8, height = 9.5)
+```
+
+```{r}
+#| message: false
+
+bpl <- (serum_boxplot / stool_boxplot) +
+  plot_layout(heights = c(0.2,0.8),
+              guides = "collect")
+
+bpl <- bpl *
+  theme_bw() *
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        plot.background = element_blank()) *
+  theme(title = element_text(size = 6),
+        axis.title.y = element_blank(),
+        axis.title.x = element_text(size = 13),
+        axis.text = element_text(size=10),
+        legend.title = element_blank(), 
+        strip.background = element_rect(fill = "white")) *
+  theme(ggside.axis.text.x = element_blank(), 
+        ggside.axis.ticks.x = element_blank(), 
+        ggside.panel.scale = .06)
+
+bpl & theme(plot.background = element_blank())
+```
+
+```{r}
+#| message: false
+
+source("~/Dropbox/Metabolomics/R_scripts/add_hmdb_classification.R")
+data1 <- add_hmdb_classification(data, classtokeep = "Hydroxy")
+myPalette1 <- hmdb_palette(data1)
+```
+
+```{r eval=FALSE}
+#| message: false
+
+data_box <- rbind(serum_box, stool_box)
+
+pl <- 
+  data_box |> ggplot(aes(x = Feature, y=log(Peak_Area), fill=IIRN_Flare)) + 
+  geom_boxplot(color = 'grey50', lwd = 0.25, outlier.shape = NA, outlier.stroke = 0) + 
+  coord_flip() +
+  theme_bw() +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        plot.background = element_blank()) +
+  theme(title = element_text(size = 6),
+        axis.title.y = element_blank(),
+        axis.title.x = element_text(size = 13),
+        axis.text = element_text(size=10),
+        legend.title = element_blank(), 
+        strip.background = element_rect(fill = "white")) +
+  scale_fill_manual(
+    values = c("#F8766D","#00BFC4"), 
+    labels = c('Relapsers','Non-Relapsers')) +
+  # facet_grid(direction~., space = "free", scales = "free") #+ 
+  ggh4x::facet_nested(Type*direction~., scales = "free", independent = "x"
+                      , space = "free_y") #+
+  # scale_x_discrete(expand = c(-10,10))
+  # ggtitle(paste(sample_type, " IIRN flare metabolits: boxplots"))
+  
+pl
+```

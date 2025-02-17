@@ -1,0 +1,117 @@
+---
+title: "HAllA_scatter_plots"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+#| message: FALSE 
+
+library(tidyverse)
+library(ggplot2)
+
+```
+
+You can add options to executable code like this
+
+```{r}
+#| message: FALSE 
+
+f_path1 <- "./"
+
+```
+
+```{r}
+#| message= FALSE 
+
+serum_meta <- 
+  paste0(f_path1,"Datasets/Cohort1_Serum_metabolomics_metadata.txt") |> read_tsv()
+serum_data <- 
+  paste0(f_path1,"Datasets/Cohort1_Serum_metabolomics_data.csv") |> read_csv()
+
+stool_meta <- 
+  paste0(f_path1,"Datasets/Cohort1_Fecal_metabolomics_metadata.txt") |> read_tsv()
+stool_data <- 
+  paste0(f_path1,"Datasets/Cohort1_Fecal_metabolomics_data.csv") |> read_csv()
+```
+
+```{r}
+#| message= FALSE 
+
+keep_samples <- serum_meta |> select(General_ID,Serum_Metabolomics_ID,IIRN_Flare) |> 
+  inner_join(stool_meta |> select(General_ID,Fecal_Metabolomics_ID))
+
+stool_keep1 <- c("Mesaconic acid","2-hydroxyglutarate")
+serum_keep1 <- c("Urate")
+
+serum1 <- serum_data |> select(Feature, all_of(keep_samples$Serum_Metabolomics_ID))
+stool1 <- stool_data |> select(Feature, all_of(keep_samples$Fecal_Metabolomics_ID))
+
+serum2 <- serum1 |> filter(Feature %in% serum_keep1)
+stool2 <- stool1 |> filter(Feature %in% stool_keep1)
+```
+
+```{r}
+#| message= FALSE 
+
+long_serum <- serum2 |> 
+  pivot_longer(cols = -contains("Feature"), 
+               names_to = "Serum_Metabolomics_ID", values_to = "mz_peak") |> 
+  left_join(keep_samples) |> select(-contains("_Metabolomics"))
+
+long_stool <- stool2 |> 
+  pivot_longer(cols = -contains("Feature"), 
+               names_to = "Fecal_Metabolomics_ID", values_to = "mz_peak") |> 
+  left_join(keep_samples) |> select(-contains("_Metabolomics"))
+
+data1 <- long_serum |> 
+  full_join(long_stool , by=c('General_ID','IIRN_Flare'), suffix = c("_Serum","_Stool")) |> 
+  relocate(General_ID, .before=1)
+
+```
+
+```{r}
+#| message= FALSE
+
+pl1 <- 
+  data1 |> 
+  ggplot(aes(x=(mz_peak_Serum), y=(mz_peak_Stool), color=IIRN_Flare)) +
+  geom_point(alpha=0.99, size = 2.5) + 
+  geom_smooth(method=lm, color = "gray75", se= F) + 
+  facet_wrap(~Feature_Stool, scales = "free", 
+            strip.position = "left")  +
+  theme_classic() +
+  scale_x_continuous(trans="log10") +
+  scale_y_continuous(trans="log10") + 
+  theme(panel.grid = element_blank(),
+        plot.background = element_blank(),
+        panel.background = element_blank(),
+        legend.background = element_blank(),
+        strip.background = element_rect(fill = "white", color = NaN),
+        strip.placement = "outside",
+        title = element_text(size=18),
+        axis.text = element_text(size=14),
+        legend.title = element_blank(),
+        legend.text = element_text(size=14),
+        strip.text = element_text(size = 16)) +
+  labs(x = "Serum Urate peak area",
+       y = "Fecal metabolites peak area")
+
+pl1
+```
+
+```{r}
+#| message= FALSE
+
+
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
