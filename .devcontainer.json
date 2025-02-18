@@ -3,7 +3,7 @@
 	"features": {
 		"ghcr.io/rocker-org/devcontainer-features/r-packages:1": {
 			"installSystemRequirements": true,
-			"packages": "tidyverse,ggpubr,picante,funrar,httr,microbiome,jbisanz/qiime2R",
+			"packages": "tidyverse,ggpubr,picante,funrar,httr,microbiome,jbisanz/qiime2R,ggside,ggsankey,ggsignif,pROC",
 			"pakVersion": "auto",
 			"additionalRepositories": "rhub = 'https://r-hub.r-universe.dev', jeroen = 'https://jeroen.r-universe.dev'"
 		},
