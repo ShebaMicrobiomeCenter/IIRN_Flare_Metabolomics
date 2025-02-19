@@ -14,7 +14,6 @@ When you click the **Render** button a document will be generated that includes 
 
 ```{r}
 #| message: false
-
 library (tidyverse)
 library(dplyr)
 library(ggplot2)
@@ -87,22 +86,23 @@ You can add options to executable code like this
 ```{r}
 #| message: false
 
-file_path <- '~/Dropbox/Metabolomics/MBX_01_02_03-IIRN/Final_datasets/'
-f_path2 <- "~/Dropbox/Metabolomics/MBX_01_02_03-IIRN/Paper/CURE_for_paper2/"
-
-f_path1 <- "~/Dropbox/Metabolomics/MBX_01_02_03-IIRN/Paper/Submissions/Revisions/Dec2024/Paper_2/Github/"
+f_path1 <- "./"
 ```
 
 ```{r}
 #| message: false
 
 Serum_map <- 
-  paste0(f_path1,"Datasets/Cohort1_Serum_metabolomics_metadata.txt") |> read_tsv()
+  paste0(f_path1,"Datasets/Cohort1_Serum_metabolomics_metadata.txt") |> 
+  read_tsv() |>
+  rename(SampleID = Serum_Metabolomics_ID)
 Serum_data <- 
   paste0(f_path1,"Datasets/Cohort1_Serum_metabolomics_data.csv") |> read_csv()
 
 Stool_map <- 
-  paste0(f_path1,"Datasets/Cohort1_Fecal_metabolomics_metadata.txt") |> read_tsv()
+  paste0(f_path1,"Datasets/Cohort1_Fecal_metabolomics_metadata.txt") |> 
+  read_tsv() |>
+  rename(SampleID = Fecal_Metabolomics_ID)
 Stool_data <- 
   paste0(f_path1,"Datasets/Cohort1_Fecal_metabolomics_data.csv") |> read_csv()
 ```
@@ -110,25 +110,26 @@ Stool_data <-
 ```{r eval=FALSE}
 #| message: false
 
-cure_data <- paste0(f_path2,"CURE_Stool_data_s418_f404_v2.csv") |> read_csv()
-cure_map <- paste0(f_path2,"CURE_nina_paper2_map_20jan25.tsv") |> 
-  read_tsv()
+cure_data <- paste0("MBX006_Data_s418f404_18Feb2024_NL.csv") |> read_csv()
+cure_map <- paste0("./","CURE_nina_paper2_map_20jan25.tsv") |> 
+  read_tsv() |> 
+  filter(!is.na(metabolomics_ID))
 
 intersect(cure_map$metabolomics_ID,colnames(cure_data)) |> length()
 exclude_samples <- setdiff(cure_map$metabolomics_ID,colnames(cure_data))
 cure_map <- cure_map |> filter(!(metabolomics_ID %in% exclude_samples))
-cure_map1 <- cure_map |> select(-SampleID) |> rename(SampleID = metabolomics_ID) |> 
+cure_map1  <- cure_map |> select(-SampleID) |> rename(SampleID = metabolomics_ID) |> 
   filter(pn_flare != "Active")
 
-cure_data <- cure_data |> select(Feature, all_of(cure_map$metabolomics_ID))
+cure_data <- cure_data |> select(Feature, all_of(cure_map1$SampleID))
 ```
 
 ```{r}
 #| message: false
 
-Serum_couples <- couples_function(Serum_data,Serum_map)
+Serum_couples <- couples_function(Serum_data,Serum_map) 
 Stool_couples <- couples_function(Stool_data,Stool_map)
-# cure_couples <- couples_function(cure_data,cure_map1)
+cure_couples <- couples_function(cure_data,cure_map1)
 ```
 
 ```{r}
@@ -136,15 +137,15 @@ Stool_couples <- couples_function(Stool_data,Stool_map)
 
 Serum_longcor1 <- pnID_function(Serum_couples,Serum_map) |> mutate(Type = "Serum")
 Stool_longcor1 <- pnID_function(Stool_couples,Stool_map) |> mutate(Type = "Fecal")
-# cure_longcor1 <- pnID_function(cure_couples,cure_map1) |> mutate(Type = "Cohort 2")
+cure_longcor1 <- pnID_function(cure_couples,cure_map1) |> mutate(Type = "Cohort 2")
 ```
 
 ```{r}
 #| message: false
 
-Serum_perm_results <- perm_test(Serum_longcor1)
+Serum_perm_results <- perm_test(Serum_longcor1 )
 Stool_perm_results <- perm_test(Stool_longcor1)
-# cure_perm_results <- perm_test(cure_longcor1)
+cure_perm_results <- perm_test(cure_longcor1)
 
 ```
 
